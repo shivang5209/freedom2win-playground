@@ -26,6 +26,8 @@ type CodeLine = {
   id: string;
   text: string;
   zone: HighlightZone;
+  indent?: number;
+  muted?: boolean;
 };
 
 export function WidgetIslandPrototype() {
@@ -44,60 +46,137 @@ export function WidgetIslandPrototype() {
   const codeLines = useMemo<CodeLine[]>(() => {
     if (!build.scaffold) {
       return [
-        { id: "hint-root", text: "// Drop Scaffold to generate the app shell", zone: "phone-root" },
-        { id: "hint-appbar", text: "// Drop AppBar into the top zone", zone: "phone-appbar" },
-        { id: "hint-column", text: "// Drop Column into the body zone", zone: "phone-body" },
-        { id: "hint-children", text: "// Add Text and Button into the Column", zone: "phone-column" },
+        { id: "hint-open", text: "Scaffold(", zone: "phone-root", muted: true },
+        {
+          id: "hint-root",
+          text: "// Drag Scaffold into the phone to start building",
+          zone: "phone-root",
+          indent: 1,
+          muted: true,
+        },
+        { id: "hint-close", text: ");", zone: "phone-root", muted: true },
       ];
     }
 
-    const childrenCode =
+    const childrenCode: CodeLine[] =
       build.children.length === 0
         ? [
             {
               id: "child-hint",
-              text: "children: const [/* Drop Text or Button */],",
-              zone: "phone-column" as HighlightZone,
+              text: "children: const [",
+              zone: "phone-column",
+              indent: 2,
+            },
+            {
+              id: "child-hint-text",
+              text: "// Add Text from tray",
+              zone: "phone-column",
+              indent: 3,
+              muted: true,
+            },
+            {
+              id: "child-hint-button",
+              text: "// Add Button from tray",
+              zone: "phone-column",
+              indent: 3,
+              muted: true,
+            },
+            {
+              id: "child-hint-close",
+              text: "],",
+              zone: "phone-column",
+              indent: 2,
             },
           ]
         : [
             {
               id: "children-open",
               text: "children: const [",
-              zone: "phone-column" as HighlightZone,
+              zone: "phone-column",
+              indent: 2,
             },
-            ...build.children.map((child, idx) => ({
-              id: `child-${idx}`,
-              text:
-                child === "Text"
-                  ? "Text('Hello from Widget Island'),"
-                  : "ElevatedButton(onPressed: null, child: Text('Tap me'))," ,
-              zone: "phone-column" as HighlightZone,
-            })),
+            ...build.children.flatMap((child, idx) =>
+              child === "Text"
+                ? [
+                    {
+                      id: `child-${idx}`,
+                      text: "Text('Hello from Widget Island'),",
+                      zone: "phone-column" as HighlightZone,
+                      indent: 3,
+                    },
+                  ]
+                : [
+                    {
+                      id: `child-${idx}-open`,
+                      text: "ElevatedButton(",
+                      zone: "phone-column" as HighlightZone,
+                      indent: 3,
+                    },
+                    {
+                      id: `child-${idx}-press`,
+                      text: "onPressed: null,",
+                      zone: "phone-column" as HighlightZone,
+                      indent: 4,
+                    },
+                    {
+                      id: `child-${idx}`,
+                      text: "child: Text('Tap me'),",
+                      zone: "phone-column" as HighlightZone,
+                      indent: 4,
+                    },
+                    {
+                      id: `child-${idx}-close`,
+                      text: "),",
+                      zone: "phone-column" as HighlightZone,
+                      indent: 3,
+                    },
+                  ],
+            ),
             {
               id: "children-close",
               text: "],",
-              zone: "phone-column" as HighlightZone,
+              zone: "phone-column",
+              indent: 2,
             },
           ];
 
     return [
       { id: "scaffold-open", text: "Scaffold(", zone: "phone-root" },
       {
-        id: "appbar",
-        text: build.appBar
-          ? "appBar: AppBar(title: const Text('My Playground App')),"
-          : "// appBar: AppBar(...),",
+        id: "appbar-open",
+        text: build.appBar ? "appBar: AppBar(" : "// appBar: AppBar(",
         zone: "phone-appbar",
+        indent: 1,
+        muted: !build.appBar,
       },
-      { id: "body", text: "body:", zone: "phone-body" },
+      {
+        id: "appbar-title",
+        text: build.appBar
+          ? "title: const Text('My Playground App'),"
+          : "// title: const Text('My Playground App'),",
+        zone: "phone-appbar",
+        indent: 2,
+        muted: !build.appBar,
+      },
+      {
+        id: "appbar-close",
+        text: build.appBar ? ")," : "// ),",
+        zone: "phone-appbar",
+        indent: 1,
+        muted: !build.appBar,
+      },
       {
         id: "column-open",
-        text: build.column ? "Column(" : "Center(child: Text('Drop Column to continue'))",
+        text: build.column
+          ? "body: Column("
+          : "body: const Center(child: Text('Drop Column to continue')),",
         zone: "phone-body",
+        indent: 1,
       },
       ...(build.column ? childrenCode : []),
-      ...(build.column ? [{ id: "column-close", text: "),", zone: "phone-body" as HighlightZone }] : []),
+      ...(build.column
+        ? [{ id: "column-close", text: "),", zone: "phone-body" as HighlightZone, indent: 1 }]
+        : []),
       { id: "scaffold-close", text: ");", zone: "phone-root" },
     ];
   }, [build]);
@@ -112,14 +191,23 @@ export function WidgetIslandPrototype() {
         ? `Column(
             children: const [
               ${hasText ? "Text('Hello from Widget Island')," : "// Add Text from tray,"}
-              ${hasButton ? "ElevatedButton(onPressed: null, child: Text('Tap me'))," : "// Add Button from tray,"}
+              ${
+                hasButton
+                  ? `ElevatedButton(
+                onPressed: null,
+                child: Text('Tap me'),
+              ),`
+                  : "// Add Button from tray,"
+              }
             ],
           )`
         : "const Center(child: Text('Drop Column in the body zone'))";
 
     const appBarCode =
       build.scaffold && build.appBar
-        ? "appBar: AppBar(title: const Text('My Playground App')),"
+        ? `appBar: AppBar(
+          title: const Text('My Playground App'),
+        ),`
         : "";
 
     return `import 'package:flutter/material.dart';
@@ -316,7 +404,7 @@ class DemoApp extends StatelessWidget {
             <TreeNode
               label={build.appBar ? "AppBar" : "AppBar (missing)"}
               secondary={!build.appBar}
-              onEnter={() => onFocusLink("phone-appbar", "appbar")}
+              onEnter={() => onFocusLink("phone-appbar", "appbar-open")}
               onLeave={onLeaveLink}
             />
             <TreeNode
@@ -363,16 +451,25 @@ class DemoApp extends StatelessWidget {
         </p>
 
         <div className="code-panel mt-4">
-          <div className="code-line code-line-file">home:</div>
-          {codeLines.map((line) => (
+          <div className="code-line code-line-file">
+            <span className="code-line-number">00</span>
+            <span className="code-line-content">home:</span>
+          </div>
+          {codeLines.map((line, index) => (
             <button
               key={line.id}
               type="button"
-              className={`code-line ${activeCodeLine === line.id ? "code-line-active" : ""}`}
+              className={`code-line ${activeCodeLine === line.id ? "code-line-active" : ""} ${line.muted ? "code-line-muted" : ""}`}
               onMouseEnter={() => onFocusLink(line.zone, line.id)}
               onMouseLeave={onLeaveLink}
             >
-              {line.text}
+              <span className="code-line-number">{String(index + 1).padStart(2, "0")}</span>
+              <span
+                className="code-line-content"
+                style={{ paddingLeft: `${(line.indent ?? 0) * 16}px` }}
+              >
+                {line.text}
+              </span>
             </button>
           ))}
         </div>
@@ -386,8 +483,10 @@ class DemoApp extends StatelessWidget {
         <div className="challenge-list mt-4">
           {challengeChecks.map((item) => (
             <div key={item.id} className={`challenge-item ${item.done ? "is-done" : ""}`}>
-              <span>{item.done ? "Done" : "Pending"}</span>
-              <span>{item.label}</span>
+              <span className="challenge-label">{item.label}</span>
+              <span className={`challenge-status ${item.done ? "is-done" : ""}`}>
+                {item.done ? "Done" : "Pending"}
+              </span>
             </div>
           ))}
         </div>

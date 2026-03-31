@@ -318,7 +318,9 @@ body {
 
 .code-line {
   width: 100%;
-  display: block;
+  display: grid;
+  grid-template-columns: 2.25rem 1fr;
+  align-items: start;
   text-align: left;
   font-family: "Consolas", "SFMono-Regular", monospace;
   font-size: 0.82rem;
@@ -326,7 +328,8 @@ body {
   border-radius: 0.55rem;
   border: 1px solid transparent;
   background: transparent;
-  padding: 0.3rem 0.45rem;
+  padding: 0.3rem 0.35rem;
+  line-height: 1.45;
 }
 
 .code-line-file {
@@ -334,10 +337,25 @@ body {
   opacity: 0.85;
 }
 
+.code-line-number {
+  color: #5e88aa;
+  font-size: 0.72rem;
+  padding-top: 0.05rem;
+}
+
+.code-line-content {
+  white-space: pre;
+  overflow-x: auto;
+}
+
 .code-line-active {
   border-color: rgba(93, 214, 255, 0.8);
   background: rgba(14, 43, 63, 0.9);
   color: #ecf8ff;
+}
+
+.code-line-muted {
+  color: #89a4bd;
 }
 
 .challenge-list {
@@ -348,7 +366,8 @@ body {
 .challenge-item {
   display: flex;
   justify-content: space-between;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.8rem;
   border: 1px solid var(--line);
   border-radius: 0.75rem;
   padding: 0.5rem 0.65rem;
@@ -356,8 +375,20 @@ body {
   color: #c7dcf1;
 }
 
-.challenge-item span:first-child {
+.challenge-label {
+  flex: 1;
+}
+
+.challenge-status {
+  border-radius: 999px;
+  border: 1px solid rgba(255, 214, 146, 0.45);
   color: #ffd692;
+  background: rgba(71, 50, 16, 0.45);
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .challenge-item.is-done {
@@ -365,8 +396,10 @@ body {
   background: rgba(23, 65, 49, 0.45);
 }
 
-.challenge-item.is-done span:first-child {
+.challenge-status.is-done {
   color: #9df0cb;
+  border-color: rgba(157, 240, 203, 0.45);
+  background: rgba(19, 70, 53, 0.5);
 }
 
 .is-highlighted {
