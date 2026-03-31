@@ -4,12 +4,13 @@ import { useMemo, useState } from "react";
 
 type TrayWidget = "Scaffold" | "AppBar" | "Column" | "Text" | "Button";
 type HighlightZone = "phone-root" | "phone-appbar" | "phone-body" | "phone-column";
+type ChildWidget = "Text" | "Button";
 
 type BuildState = {
   scaffold: boolean;
   appBar: boolean;
   column: boolean;
-  children: Array<"Text" | "Button">;
+  children: ChildWidget[];
 };
 
 const TRAY_ITEMS: TrayWidget[] = ["Scaffold", "AppBar", "Column", "Text", "Button"];
@@ -21,37 +22,17 @@ const INITIAL_STATE: BuildState = {
   children: [],
 };
 
+type CodeLine = {
+  id: string;
+  text: string;
+  zone: HighlightZone;
+};
+
 export function WidgetIslandPrototype() {
   const [build, setBuild] = useState<BuildState>(INITIAL_STATE);
   const [highlight, setHighlight] = useState<HighlightZone | null>(null);
-
-  const treeNodes = useMemo(() => {
-    if (!build.scaffold) return [];
-
-    return [
-      {
-        key: "Scaffold",
-        zone: "phone-root" as HighlightZone,
-        children: [
-          {
-            key: "AppBar",
-            zone: "phone-appbar" as HighlightZone,
-            present: build.appBar,
-          },
-          {
-            key: "Column",
-            zone: "phone-body" as HighlightZone,
-            present: build.column,
-            children: build.children.map((child, idx) => ({
-              key: `${child}-${idx}`,
-              label: child,
-              zone: "phone-column" as HighlightZone,
-            })),
-          },
-        ],
-      },
-    ];
-  }, [build]);
+  const [activeCodeLine, setActiveCodeLine] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const isComplete =
     build.scaffold &&
@@ -59,6 +40,119 @@ export function WidgetIslandPrototype() {
     build.column &&
     build.children.includes("Text") &&
     build.children.includes("Button");
+
+  const codeLines = useMemo<CodeLine[]>(() => {
+    if (!build.scaffold) {
+      return [
+        { id: "hint-root", text: "// Drop Scaffold to generate the app shell", zone: "phone-root" },
+        { id: "hint-appbar", text: "// Drop AppBar into the top zone", zone: "phone-appbar" },
+        { id: "hint-column", text: "// Drop Column into the body zone", zone: "phone-body" },
+        { id: "hint-children", text: "// Add Text and Button into the Column", zone: "phone-column" },
+      ];
+    }
+
+    const childrenCode =
+      build.children.length === 0
+        ? [
+            {
+              id: "child-hint",
+              text: "children: const [/* Drop Text or Button */],",
+              zone: "phone-column" as HighlightZone,
+            },
+          ]
+        : [
+            {
+              id: "children-open",
+              text: "children: const [",
+              zone: "phone-column" as HighlightZone,
+            },
+            ...build.children.map((child, idx) => ({
+              id: `child-${idx}`,
+              text:
+                child === "Text"
+                  ? "Text('Hello from Widget Island'),"
+                  : "ElevatedButton(onPressed: null, child: Text('Tap me'))," ,
+              zone: "phone-column" as HighlightZone,
+            })),
+            {
+              id: "children-close",
+              text: "],",
+              zone: "phone-column" as HighlightZone,
+            },
+          ];
+
+    return [
+      { id: "scaffold-open", text: "Scaffold(", zone: "phone-root" },
+      {
+        id: "appbar",
+        text: build.appBar
+          ? "appBar: AppBar(title: const Text('My Playground App')),"
+          : "// appBar: AppBar(...),",
+        zone: "phone-appbar",
+      },
+      { id: "body", text: "body:", zone: "phone-body" },
+      {
+        id: "column-open",
+        text: build.column ? "Column(" : "Center(child: Text('Drop Column to continue'))",
+        zone: "phone-body",
+      },
+      ...(build.column ? childrenCode : []),
+      ...(build.column ? [{ id: "column-close", text: "),", zone: "phone-body" as HighlightZone }] : []),
+      { id: "scaffold-close", text: ");", zone: "phone-root" },
+    ];
+  }, [build]);
+
+  const flutterSnippet = useMemo(() => {
+    const hasText = build.children.includes("Text");
+    const hasButton = build.children.includes("Button");
+
+    const scaffoldBody = !build.scaffold
+      ? "const Center(child: Text('Drop Scaffold in Widget Island to begin'))"
+      : build.column
+        ? `Column(
+            children: const [
+              ${hasText ? "Text('Hello from Widget Island')," : "// Add Text from tray,"}
+              ${hasButton ? "ElevatedButton(onPressed: null, child: Text('Tap me'))," : "// Add Button from tray,"}
+            ],
+          )`
+        : "const Center(child: Text('Drop Column in the body zone'))";
+
+    const appBarCode =
+      build.scaffold && build.appBar
+        ? "appBar: AppBar(title: const Text('My Playground App')),"
+        : "";
+
+    return `import 'package:flutter/material.dart';
+
+void main() => runApp(const DemoApp());
+
+class DemoApp extends StatelessWidget {
+  const DemoApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: ${build.scaffold ? `Scaffold(
+        ${appBarCode}
+        body: ${scaffoldBody},
+      )` : scaffoldBody},
+    );
+  }
+}`;
+  }, [build]);
+
+  const dartPadLink = useMemo(
+    () => `https://dartpad.dev/?null_safety=true#code=${encodeURIComponent(flutterSnippet)}`,
+    [flutterSnippet],
+  );
+
+  const challengeChecks = [
+    { id: "check-scaffold", done: build.scaffold, label: "Place Scaffold" },
+    { id: "check-appbar", done: build.appBar, label: "Place AppBar" },
+    { id: "check-column", done: build.column, label: "Place Column" },
+    { id: "check-text", done: build.children.includes("Text"), label: "Add Text in Column" },
+    { id: "check-button", done: build.children.includes("Button"), label: "Add Button in Column" },
+  ];
 
   function onDropWidget(zone: string, widget: string) {
     if (!TRAY_ITEMS.includes(widget as TrayWidget)) return;
@@ -99,8 +193,24 @@ export function WidgetIslandPrototype() {
     });
   }
 
+  async function copyCode() {
+    await navigator.clipboard.writeText(flutterSnippet);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
+  }
+
+  function onFocusLink(zone: HighlightZone, codeLineId: string | null = null) {
+    setHighlight(zone);
+    if (codeLineId) setActiveCodeLine(codeLineId);
+  }
+
+  function onLeaveLink() {
+    setHighlight(null);
+    setActiveCodeLine(null);
+  }
+
   return (
-    <section className="grid gap-5 lg:grid-cols-[280px_1fr_320px]">
+    <section className="grid gap-5 xl:grid-cols-[250px_1fr_320px]">
       <aside className="panel-card">
         <h2 className="panel-title">Widget Tray</h2>
         <div className="mt-4 grid gap-3">
@@ -120,7 +230,7 @@ export function WidgetIslandPrototype() {
           ))}
         </div>
         <p className="panel-help mt-4">
-          Tip: drag into highlighted zones. Removing Scaffold resets the entire build.
+          Tip: drag into drop zones, then inspect generated Flutter code below.
         </p>
       </aside>
 
@@ -198,42 +308,88 @@ export function WidgetIslandPrototype() {
         )}
         {build.scaffold && (
           <div className="mt-4 space-y-4">
-            {treeNodes.map((root) => (
-              <div key={root.key}>
+            <TreeNode
+              label="Scaffold"
+              onEnter={() => onFocusLink("phone-root", "scaffold-open")}
+              onLeave={onLeaveLink}
+            />
+            <TreeNode
+              label={build.appBar ? "AppBar" : "AppBar (missing)"}
+              secondary={!build.appBar}
+              onEnter={() => onFocusLink("phone-appbar", "appbar")}
+              onLeave={onLeaveLink}
+            />
+            <TreeNode
+              label={build.column ? "Column" : "Column (missing)"}
+              secondary={!build.column}
+              onEnter={() => onFocusLink("phone-body", "column-open")}
+              onLeave={onLeaveLink}
+            />
+            {build.column &&
+              build.children.map((child, idx) => (
                 <TreeNode
-                  label={root.key}
-                  onEnter={() => setHighlight(root.zone)}
-                  onLeave={() => setHighlight(null)}
+                  key={`${child}-${idx}`}
+                  label={child}
+                  compact
+                  onEnter={() => onFocusLink("phone-column", `child-${idx}`)}
+                  onLeave={onLeaveLink}
                 />
-                <TreeNode
-                  label={build.appBar ? "AppBar" : "AppBar (missing)"}
-                  secondary={!build.appBar}
-                  onEnter={() => setHighlight("phone-appbar")}
-                  onLeave={() => setHighlight(null)}
-                />
-                <TreeNode
-                  label={build.column ? "Column" : "Column (missing)"}
-                  secondary={!build.column}
-                  onEnter={() => setHighlight("phone-body")}
-                  onLeave={() => setHighlight(null)}
-                />
-                {build.column &&
-                  build.children.map((child, idx) => (
-                    <TreeNode
-                      key={`${child}-${idx}`}
-                      label={child}
-                      compact
-                      onEnter={() => setHighlight("phone-column")}
-                      onLeave={() => setHighlight(null)}
-                    />
-                  ))}
-              </div>
-            ))}
+              ))}
           </div>
         )}
 
         <div className={`completion-banner mt-6 ${isComplete ? "is-active" : ""}`}>
-          {isComplete ? "First build complete. Nice snap." : "Build target: Scaffold + AppBar + Column + Text + Button"}
+          {isComplete
+            ? "First build complete. Now open DartPad to edit real Flutter code."
+            : "Build target: Scaffold + AppBar + Column + Text + Button"}
+        </div>
+      </aside>
+
+      <section className="panel-card xl:col-span-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="panel-title">Live Flutter Code</h2>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="tool-pill" onClick={copyCode}>
+              {copied ? "Copied" : "Copy Code"}
+            </button>
+            <a className="tool-pill tool-pill-primary" href={dartPadLink} target="_blank" rel="noreferrer">
+              Open in DartPad
+            </a>
+          </div>
+        </div>
+
+        <p className="panel-help mt-3">
+          Hover tree nodes or code lines to see UI-to-code mapping.
+        </p>
+
+        <div className="code-panel mt-4">
+          <div className="code-line code-line-file">home:</div>
+          {codeLines.map((line) => (
+            <button
+              key={line.id}
+              type="button"
+              className={`code-line ${activeCodeLine === line.id ? "code-line-active" : ""}`}
+              onMouseEnter={() => onFocusLink(line.zone, line.id)}
+              onMouseLeave={onLeaveLink}
+            >
+              {line.text}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <aside className="panel-card">
+        <h2 className="panel-title">Starter Challenge</h2>
+        <p className="panel-help mt-3">
+          Complete the checklist and then open DartPad to modify labels or add widgets in code.
+        </p>
+        <div className="challenge-list mt-4">
+          {challengeChecks.map((item) => (
+            <div key={item.id} className={`challenge-item ${item.done ? "is-done" : ""}`}>
+              <span>{item.done ? "Done" : "Pending"}</span>
+              <span>{item.label}</span>
+            </div>
+          ))}
         </div>
       </aside>
     </section>
